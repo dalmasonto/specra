@@ -81,6 +81,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-svelte": "^8.5.1",
+    "github-slugger": "^2.0.0",
     "gray-matter": "^4.0.3",
     "hast-util-to-html": "^9.0.0",
     "js-yaml": "^4.1.1",

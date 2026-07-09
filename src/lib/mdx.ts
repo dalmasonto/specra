@@ -10,6 +10,7 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import remarkRehype from "remark-rehype"
 import rehypeSlug from "rehype-slug"
+import { slug as githubSlug } from "github-slugger"
 import rehypeRaw from "rehype-raw"
 import rehypeKatex from "rehype-katex"
 import rehypeStringify from "rehype-stringify"
@@ -184,11 +185,84 @@ function maskInlineCodePipes(markdown: string): string {
 }
 
 /**
- * Restore `PIPE_MARKER` back to `|` in a string. No-op if the marker
- * isn't present (the common case), so cheap to call blanket.
+ * Private Use Area characters used to mask `<` and `>` written inside code
+ * (inline spans or fenced blocks) that sits within a component block.
+ *
+ * Why: `ensureComponentBlockIntegrity` deliberately collapses blank lines so
+ * that an entire `<Callout>…</Callout>` stays one CommonMark HTML block. But
+ * inside an HTML block, markdown no longer applies — code spans and fences stop
+ * being code — so a documented tag such as
+ *   An inline `<script src="/x.js">` tag.
+ * is handed to rehype-raw as *real HTML*. parse5 opens a raw-text `<script>`
+ * element that is never closed and swallows every following sibling, so the
+ * next heading silently disappears from the page and its ToC link 404s.
+ *
+ * Masking the angle brackets before remark sees them keeps the block inert for
+ * parse5, and `restoreCodeMarkers` puts them back after the component's
+ * children have been re-parsed as markdown. PUA chars pass through
+ * remark/rehype unchanged and are never HTML-escaped — same trick as
+ * `PIPE_MARKER` above.
+ */
+const LT_MARKER = ''
+const GT_MARKER = ''
+
+/**
+ * Mask `<` and `>` inside fenced code blocks and single-line inline code spans.
+ * Applied only to the interior of component blocks, where markdown code markers
+ * lose their meaning. Component tags themselves live outside code and are left
+ * alone, so `<Callout>` still parses as a component.
+ */
+function maskCodeAngleBrackets(markdown: string): string {
+  const maskAngles = (s: string) => s.replace(/</g, LT_MARKER).replace(/>/g, GT_MARKER)
+
+  return splitByCodeFences(markdown).map(({ text, isCode }) => {
+    if (isCode) return maskAngles(text)
+    let result = ''
+    let i = 0
+    while (i < text.length) {
+      if (text[i] !== '`') {
+        result += text[i]
+        i++
+        continue
+      }
+      let openLen = 0
+      while (i + openLen < text.length && text[i + openLen] === '`') openLen++
+      let j = i + openLen
+      let closeIdx = -1
+      while (j < text.length && text[j] !== '\n') {
+        if (text[j] === '`') {
+          let closeLen = 0
+          while (j + closeLen < text.length && text[j + closeLen] === '`') closeLen++
+          if (closeLen === openLen) { closeIdx = j; break }
+          j += closeLen
+        } else {
+          j++
+        }
+      }
+      if (closeIdx === -1) {
+        result += text.slice(i, i + openLen)
+        i += openLen
+      } else {
+        const content = maskAngles(text.slice(i + openLen, closeIdx))
+        result += text.slice(i, i + openLen) + content + text.slice(closeIdx, closeIdx + openLen)
+        i = closeIdx + openLen
+      }
+    }
+    return result
+  }).join('')
+}
+
+/**
+ * Restore `PIPE_MARKER` back to `|`, and `LT_MARKER`/`GT_MARKER` back to
+ * `<`/`>`, in a string. No-op if no marker is present (the common case), so
+ * cheap to call blanket.
  */
 function restorePipeMarkers(s: string): string {
-  return s.indexOf(PIPE_MARKER) === -1 ? s : s.split(PIPE_MARKER).join('|')
+  let out = s
+  if (out.indexOf(PIPE_MARKER) !== -1) out = out.split(PIPE_MARKER).join('|')
+  if (out.indexOf(LT_MARKER) !== -1) out = out.split(LT_MARKER).join('<')
+  if (out.indexOf(GT_MARKER) !== -1) out = out.split(GT_MARKER).join('>')
+  return out
 }
 
 /**
@@ -1213,7 +1287,14 @@ function ensureComponentBlockIntegrity(markdown: string): string {
     // code fences. The code fence content is raw text inside the HTML block and
     // will be re-processed by processComponentChildren through the markdown
     // pipeline, which restores proper code formatting.
-    const collapsed = block.replace(/^\s*$/gm, '<!-- -->')
+    // Mask `<`/`>` written inside code (inline spans and fences) BEFORE the
+    // blank-line collapse turns this whole block into one raw HTML block.
+    // Once it is raw HTML, markdown code markers no longer protect their
+    // contents, and a documented tag like `<script src="...">` reaches parse5
+    // as real HTML — a raw-text element that never closes and swallows every
+    // sibling after the component, heading and all. Restored by
+    // `restorePipeMarkers` once the children are re-parsed as markdown.
+    const collapsed = maskCodeAngleBrackets(block).replace(/^\s*$/gm, '<!-- -->')
 
     result += markdown.slice(lastIndex, blockStart) + collapsed
     lastIndex = blockEnd
@@ -1799,19 +1880,29 @@ export function getAdjacentDocs(currentSlug: string, allDocs: Doc[]): { previous
 export function extractTableOfContents(content: string): TocItem[] {
   const headingRegex = /^(#{2,3})\s+(.+)$/gm
   const toc: TocItem[] = []
-  let match
 
-  while ((match = headingRegex.exec(content)) !== null) {
-    const level = match[1].length
-    const text = match[2]
-    // Generate ID the same way rehype-slug does
-    const id = text
-      .toLowerCase()
-      .replace(/\s+/g, "-") // Replace spaces with hyphens first
-      .replace(/[^a-z0-9-]/g, "") // Remove special chars (dots, slashes, etc)
-      .replace(/^-|-$/g, "") // Remove leading/trailing hyphens
+  // Headings inside fenced code blocks are code, not headings. They get no
+  // `id` in the rendered page, so a ToC entry for them can only ever 404.
+  for (const { text: segment, isCode } of splitByCodeFences(content)) {
+    if (isCode) continue
 
-    toc.push({ id, title: text, level })
+    let match
+    headingRegex.lastIndex = 0
+    while ((match = headingRegex.exec(segment)) !== null) {
+      const level = match[1].length
+      const text = match[2]
+
+      // Use the SAME slugger rehype-slug uses, rather than approximating it.
+      // The old hand-rolled version stripped `_` and trimmed a trailing `-`,
+      // while github-slugger keeps both — so every heading naming a snake_case
+      // identifier (`list_display`, `on_upload`, `cache_page`) produced a ToC
+      // link that pointed at nothing. Backticks are stripped first because
+      // rehype-slug slugs the RENDERED heading text, where `code` markup is
+      // already gone.
+      const id = githubSlug(text.replace(/`/g, ""))
+
+      toc.push({ id, title: text, level })
+    }
   }
 
   return toc
