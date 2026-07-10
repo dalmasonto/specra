@@ -10,7 +10,7 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import remarkRehype from "remark-rehype"
 import rehypeSlug from "rehype-slug"
-import { slug as githubSlug } from "github-slugger"
+import GithubSlugger from "github-slugger"
 import rehypeRaw from "rehype-raw"
 import rehypeKatex from "rehype-katex"
 import rehypeStringify from "rehype-stringify"
@@ -1882,11 +1882,25 @@ export function getAdjacentDocs(currentSlug: string, allDocs: Doc[]): { previous
 }
 
 export function extractTableOfContents(content: string): TocItem[] {
-  const headingRegex = /^(#{2,3})\s+(.+)$/gm
+  // Every heading level, not just the 2–3 the ToC shows. See the slugger note below.
+  const headingRegex = /^(#{1,6})\s+(.+)$/gm
   const toc: TocItem[] = []
 
+  // Mirror rehype-slug exactly: it builds ONE GithubSlugger per document and
+  // slugs every h1–h6 in order, so a repeated heading renders as `setup` and
+  // then `setup-1`. github-slugger's bare `slug()` export is stateless and
+  // cannot know that, so it emitted `setup` twice and the second ToC link
+  // silently scrolled to the first heading.
+  //
+  // The slugger must see headings the ToC never displays (h1, h4–h6) because
+  // they still consume names from the same namespace — `# Setup` followed by
+  // `## Setup` renders the h2 as `setup-1`.
+  const slugger = new GithubSlugger()
+
   // Headings inside fenced code blocks are code, not headings. They get no
-  // `id` in the rendered page, so a ToC entry for them can only ever 404.
+  // `id` in the rendered page, so a ToC entry for them can only ever 404 —
+  // and rehype-slug never sees them either, so skipping them keeps the two
+  // sluggers in lockstep.
   for (const { text: segment, isCode } of splitByCodeFences(content)) {
     if (isCode) continue
 
@@ -1896,14 +1910,12 @@ export function extractTableOfContents(content: string): TocItem[] {
       const level = match[1].length
       const text = match[2]
 
-      // Use the SAME slugger rehype-slug uses, rather than approximating it.
-      // The old hand-rolled version stripped `_` and trimmed a trailing `-`,
-      // while github-slugger keeps both — so every heading naming a snake_case
-      // identifier (`list_display`, `on_upload`, `cache_page`) produced a ToC
-      // link that pointed at nothing. Backticks are stripped first because
-      // rehype-slug slugs the RENDERED heading text, where `code` markup is
-      // already gone.
-      const id = githubSlug(text.replace(/`/g, ""))
+      // Backticks are stripped first because rehype-slug slugs the RENDERED
+      // heading text, where `code` markup is already gone. Always slug, even
+      // for levels we drop, to keep the occurrence counters aligned.
+      const id = slugger.slug(text.replace(/`/g, ""))
+
+      if (level < 2 || level > 3) continue
 
       toc.push({ id, title: text, level })
     }
