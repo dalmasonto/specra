@@ -3,6 +3,8 @@ import path from "path"
 import matter from "gray-matter"
 import yaml from "js-yaml"
 import { rehypeBasePath } from "./rehype-base-path.js"
+import { rehypeChangelogIds } from "./rehype-changelog-ids.js"
+import { annotateChangelogNodes } from "./changelog.js"
 import { remarkCodeMeta } from "./remark-code-meta.js"
 import { unified } from "unified"
 import remarkParse from "remark-parse"
@@ -86,6 +88,8 @@ const COMPONENT_TAG_MAP: Record<string, string> = {
   apiresponse: 'ApiResponse',
   apiplayground: 'ApiPlayground',
   apireference: 'ApiReference',
+  changelog: 'Changelog',
+  update: 'Update',
 }
 
 /**
@@ -1310,7 +1314,7 @@ function ensureComponentBlockIntegrity(markdown: string): string {
   return markdown
 }
 
-async function processMarkdownToMdxNodes(markdown: string): Promise<MdxNode[]> {
+export async function processMarkdownToMdxNodes(markdown: string): Promise<MdxNode[]> {
   // Mask pipes inside inline code spans so GFM tables containing
   // `{{ x | filter }}`-style code don't get their rows broken.
   const masked = maskInlineCodePipes(markdown)
@@ -1336,6 +1340,9 @@ async function processMarkdownToMdxNodes(markdown: string): Promise<MdxNode[]> {
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
     .use(rehypeSlug)
+    // After rehypeSlug so the intent is obvious: replay the heading sequence
+    // through a second slugger, then anchor each <Update> in that namespace.
+    .use(rehypeChangelogIds)
     .use(rehypeKatex)
 
   if (basePath) {
@@ -1349,6 +1356,12 @@ async function processMarkdownToMdxNodes(markdown: string): Promise<MdxNode[]> {
   const children = (hast as any).children || []
   const nodes = await hastChildrenToMdxNodes(children)
   restorePipeMarkersInNodes(nodes)
+
+  // Union each <Changelog>'s child tags into `allTags`. Done here, on the
+  // server, because children render after their parent during SSR — a filter
+  // bar that waited for its updates to self-register would serialize empty.
+  annotateChangelogNodes(nodes)
+
   return nodes
 }
 
@@ -1382,6 +1395,7 @@ export interface DocMeta {
   icon?: string  // Icon name for sidebar display (Lucide icon name)
   tab_group?: string  // Tab group ID for organizing docs into tabs
   badge?: BadgeInput  // Badge(s) shown next to this page in the sidebar
+  rss?: boolean  // Publish this page's <Update> entries as an RSS feed at <page>/rss.xml
   locale?: string // Locale of the document
   protected?: boolean  // Whether this page requires social login to access
   isProtected?: boolean  // Whether this page requires authentication
@@ -1882,8 +1896,11 @@ export function getAdjacentDocs(currentSlug: string, allDocs: Doc[]): { previous
 }
 
 export function extractTableOfContents(content: string): TocItem[] {
-  // Every heading level, not just the 2–3 the ToC shows. See the slugger note below.
-  const headingRegex = /^(#{1,6})\s+(.+)$/gm
+  // One regex over both kinds of anchor so they come back in document order.
+  //   group 1/2 — an ATX heading, at any level (see the slugger note below)
+  //   group 3   — the `label` of an <Update>, which anchors a changelog entry
+  // `[^>]*?` (not `.`) spans newlines, because authors wrap long <Update> tags.
+  const anchorRegex = /^(#{1,6})[ \t]+(.+)$|<update\b[^>]*?\blabel\s*=\s*["']([^"']+)["']/gim
   const toc: TocItem[] = []
 
   // Mirror rehype-slug exactly: it builds ONE GithubSlugger per document and
@@ -1895,20 +1912,33 @@ export function extractTableOfContents(content: string): TocItem[] {
   // The slugger must see headings the ToC never displays (h1, h4–h6) because
   // they still consume names from the same namespace — `# Setup` followed by
   // `## Setup` renders the h2 as `setup-1`.
+  //
+  // <Update> labels share this slugger too, mirroring rehype-changelog-ids.ts,
+  // so a label can never collide with a heading of the same text.
   const slugger = new GithubSlugger()
 
   // Headings inside fenced code blocks are code, not headings. They get no
   // `id` in the rendered page, so a ToC entry for them can only ever 404 —
   // and rehype-slug never sees them either, so skipping them keeps the two
-  // sluggers in lockstep.
+  // sluggers in lockstep. The same reasoning covers a fenced <Update> example.
   for (const { text: segment, isCode } of splitByCodeFences(content)) {
     if (isCode) continue
 
     let match
-    headingRegex.lastIndex = 0
-    while ((match = headingRegex.exec(segment)) !== null) {
-      const level = match[1].length
-      const text = match[2]
+    anchorRegex.lastIndex = 0
+    while ((match = anchorRegex.exec(segment)) !== null) {
+      const [, hashes, headingText, updateLabel] = match
+
+      if (updateLabel !== undefined) {
+        const label = updateLabel.trim()
+        if (!label) continue
+        // Updates sit at the ToC's top level, alongside h2s.
+        toc.push({ id: slugger.slug(label), title: label, level: 2 })
+        continue
+      }
+
+      const level = hashes.length
+      const text = headingText.trim()
 
       // Backticks are stripped first because rehype-slug slugs the RENDERED
       // heading text, where `code` markup is already gone. Always slug, even

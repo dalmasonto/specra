@@ -38,6 +38,8 @@ export { default as MobileSidebarWrapper } from './MobileSidebarWrapper.svelte';
 export { default as NotFoundContent } from './NotFoundContent.svelte';
 export { default as SearchHighlight } from './SearchHighlight.svelte';
 export { default as SearchModal } from './SearchModal.svelte';
+export { default as Changelog } from './Changelog.svelte';
+export { default as Update } from './Update.svelte';
 export { default as Sidebar } from './Sidebar.svelte';
 export { default as SidebarBadge } from './SidebarBadge.svelte';
 export { default as SidebarMenuItems } from './SidebarMenuItems.svelte';

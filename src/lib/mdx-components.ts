@@ -45,6 +45,8 @@ import {
   ApiResponse,
   ApiPlayground,
   ApiReference,
+  Changelog,
+  Update,
 } from './components/docs'
 
 // Re-export all MDX-usable components
@@ -78,6 +80,8 @@ export {
   ApiResponse,
   ApiPlayground,
   ApiReference,
+  Changelog,
+  Update,
 }
 
 /**
@@ -114,4 +118,6 @@ export const mdxComponents: Record<string, Component> = {
   ApiResponse,
   ApiPlayground,
   ApiReference,
+  Changelog,
+  Update,
 }
