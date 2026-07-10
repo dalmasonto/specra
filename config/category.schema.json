@@ -2,9 +2,67 @@
   "$ref": "#/definitions/CategoryConfig",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
+    "BadgeColor": {
+      "enum": [
+        "gray",
+        "red",
+        "orange",
+        "amber",
+        "green",
+        "teal",
+        "blue",
+        "purple",
+        "pink",
+        "cyan"
+      ],
+      "type": "string"
+    },
+    "BadgeInput": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/BadgeSpec"
+        },
+        {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/definitions/BadgeSpec"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      ],
+      "description": "Anything an author may write in frontmatter or `_category_.json`."
+    },
+    "BadgeSpec": {
+      "additionalProperties": false,
+      "description": "A badge written out longhand. `color` falls back to the preset, then to gray.",
+      "properties": {
+        "color": {
+          "$ref": "#/definitions/BadgeColor"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
     "CategoryConfig": {
       "additionalProperties": false,
       "properties": {
+        "badge": {
+          "$ref": "#/definitions/BadgeInput"
+        },
         "collapsed": {
           "type": "boolean"
         },

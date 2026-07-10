@@ -4,10 +4,13 @@
  * to ensure ordering is handled the same way everywhere.
  */
 
+import type { BadgeInput } from "./badges.js"
+
 export interface SidebarGroup {
   label: string
   path: string
   icon?: string
+  badge?: BadgeInput
   items: any[]
   position: number
   collapsible: boolean
@@ -63,6 +66,7 @@ export function buildSidebarStructure<T extends {
   categoryLabel?: string
   categoryPosition?: number
   categoryIcon?: string
+  categoryBadge?: BadgeInput
   categoryCollapsible?: boolean
   categoryCollapsed?: boolean
   meta: any
@@ -78,6 +82,7 @@ export function buildSidebarStructure<T extends {
     label?: string
     position?: number
     icon?: string
+    badge?: BadgeInput
     collapsible?: boolean
     collapsed?: boolean
   }>()
@@ -86,11 +91,14 @@ export function buildSidebarStructure<T extends {
     const pathParts = doc.filePath.split("/")
     const folderPath = pathParts.length > 1 ? pathParts.slice(0, -1).join("/") : ""
 
-    if (folderPath && doc.categoryLabel) {
+    // A `_category_.json` may set a badge without setting a label, so keying
+    // this purely off `categoryLabel` would silently drop the badge.
+    if (folderPath && (doc.categoryLabel || doc.categoryBadge)) {
       categoryMetadata.set(folderPath, {
         label: doc.categoryLabel,
         position: doc.categoryPosition,
         icon: doc.categoryIcon,
+        badge: doc.categoryBadge,
         collapsible: doc.categoryCollapsible,
         collapsed: doc.categoryCollapsed
       })
@@ -144,6 +152,7 @@ export function buildSidebarStructure<T extends {
             label: metadata?.label ?? folderLabel,
             path: currentPath,
             icon: metadata?.icon,
+            badge: metadata?.badge,
             items: [],
             position: metadata?.position ?? 999,
             collapsible: metadata?.collapsible ?? true,

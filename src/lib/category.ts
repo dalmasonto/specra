@@ -1,6 +1,7 @@
 // Note: This file uses server-only APIs (fs, path) and should only be imported in Server Components
 import fs from "fs"
 import path from "path"
+import type { BadgeInput } from "./badges.js"
 
 export interface CategoryConfig {
   label?: string
@@ -14,6 +15,7 @@ export interface CategoryConfig {
   collapsible?: boolean
   icon?: string  // Icon name for sidebar display (Lucide icon name)
   tab_group?: string  // Tab group ID for organizing categories into tabs
+  badge?: BadgeInput  // Badge(s) shown on the group header in the sidebar
 }
 
 const DOCS_DIR = typeof process !== 'undefined' ? path.join(process.cwd(), "docs") : "docs"

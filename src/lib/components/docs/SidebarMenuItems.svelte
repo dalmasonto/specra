@@ -4,6 +4,8 @@
   import { ChevronRight, ChevronDown, Lock } from 'lucide-svelte';
   import type { SpecraConfig } from '$lib/config.types.js';
   import Icon from './Icon.svelte';
+  import SidebarBadge from './SidebarBadge.svelte';
+  import { resolveBadges, type BadgeInput } from '$lib/badges.js';
   import { sortSidebarItems, sortSidebarGroups } from '$lib/sidebar-utils.js';
   import { renderInlineCode } from '$lib/inline.js';
 
@@ -21,11 +23,13 @@
     categoryCollapsed?: boolean;
     categoryIcon?: string;
     categoryTabGroup?: string;
+    categoryBadge?: BadgeInput;
     meta?: {
       icon?: string;
       tab_group?: string;
       sidebar_position?: number;
       order?: number;
+      badge?: BadgeInput;
       [key: string]: any;
     };
   }
@@ -34,6 +38,7 @@
     label: string;
     path: string;
     icon?: string;
+    badge?: BadgeInput;
     items: DocItem[];
     position: number;
     collapsible: boolean;
@@ -150,6 +155,7 @@
         if (isIndexFile) {
           rootGroups[groupName].position = doc.sidebar_position ?? 999;
           rootGroups[groupName].icon = doc.categoryIcon;
+          rootGroups[groupName].badge = doc.categoryBadge;
         }
         rootGroups[groupName].items.push(doc);
         return;
@@ -168,14 +174,19 @@
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(' ');
 
+          const isOwnCategory = i === folderParts.length - 1;
+
           if (!currentLevel[folder]) {
             currentLevel[folder] = {
               label:
-                doc.categoryLabel && i === folderParts.length - 1
+                doc.categoryLabel && isOwnCategory
                   ? doc.categoryLabel
                   : folderLabel,
               path: currentPath,
               icon: doc.categoryIcon,
+              // A doc's `_category_.json` describes its *own* folder, so the
+              // badge must not leak onto the ancestor folders we walk through.
+              badge: isOwnCategory ? doc.categoryBadge : undefined,
               items: [],
               position: doc.categoryPosition ?? 999,
               collapsible: doc.categoryCollapsible ?? true,
@@ -184,7 +195,10 @@
             };
           }
 
-          if (i === folderParts.length - 1) {
+          if (isOwnCategory) {
+            if (doc.categoryBadge) {
+              currentLevel[folder].badge = doc.categoryBadge;
+            }
             if (isIndexFile) {
               currentLevel[folder].position =
                 doc.categoryPosition ?? doc.sidebar_position ?? 999;
@@ -287,6 +301,7 @@
   {@const marginLeft = depth > 0 ? 'ml-4' : ''}
   {@const groupHref = getGroupHref(group)}
   {@const mergedItems = getMergedItems(group)}
+  {@const groupBadges = resolveBadges(group.badge)}
 
   <div class="space-y-1 {marginLeft}">
     <div class="flex items-center group">
@@ -296,14 +311,21 @@
           e.preventDefault();
           toggleSection(groupKey);
         }}
-        class="flex items-center gap-2 flex-1 px-3 py-2 text-sm font-semibold rounded-l-xl transition-all {isGroupActive
+        class="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-sm font-semibold rounded-l-xl transition-all {isGroupActive
           ? 'bg-primary/10 text-primary'
           : 'text-foreground hover:bg-accent/50'}"
       >
         {#if group.icon}
           <Icon icon={group.icon} size={16} className="shrink-0" />
         {/if}
-        {@html renderInlineCode(group.label)}
+        <span class="truncate">{@html renderInlineCode(group.label)}</span>
+        {#if groupBadges.length > 0}
+          <span class="ml-auto flex items-center gap-1 shrink-0">
+            {#each groupBadges as badge (badge.text)}
+              <SidebarBadge {badge} />
+            {/each}
+          </span>
+        {/if}
       </a>
 
       {#if hasContent && group.collapsible && config.navigation?.collapsibleSidebar}
@@ -333,19 +355,27 @@
           {:else}
             {@const href = `${docsBase}/${item.doc.slug}`}
             {@const isActive = pathname === href}
+            {@const badges = resolveBadges(item.doc.meta?.badge)}
             <a
               {href}
               onclick={onLinkClick}
-              class="flex items-center gap-2 px-3 py-2 text-sm rounded-xl transition-all {isActive
+              class="flex items-center gap-2 min-w-0 px-3 py-2 text-sm rounded-xl transition-all {isActive
                 ? 'bg-primary/10 text-primary font-medium'
                 : 'text-foreground hover:text-foreground hover:bg-accent/50'}"
             >
               {#if item.doc.meta?.icon}
                 <Icon icon={item.doc.meta.icon} size={16} className="shrink-0" />
               {/if}
-              {@html renderInlineCode(item.doc.title)}
-              {#if item.doc.meta?.isProtected}
-                <Lock size={14} class="shrink-0 text-muted-foreground ml-auto" />
+              <span class="truncate">{@html renderInlineCode(item.doc.title)}</span>
+              {#if badges.length > 0 || item.doc.meta?.isProtected}
+                <span class="ml-auto flex items-center gap-1 shrink-0">
+                  {#each badges as badge (badge.text)}
+                    <SidebarBadge {badge} />
+                  {/each}
+                  {#if item.doc.meta?.isProtected}
+                    <Lock size={14} class="text-muted-foreground" />
+                  {/if}
+                </span>
               {/if}
             </a>
           {/if}
@@ -360,19 +390,27 @@
     {#each sortedStandalone as doc (doc.slug)}
       {@const href = `${docsBase}/${doc.slug}`}
       {@const isActive = pathname === href}
+      {@const badges = resolveBadges(doc.meta?.badge)}
       <a
         {href}
         onclick={onLinkClick}
-        class="flex items-center gap-2 px-3 py-2 text-sm rounded-xl transition-all {isActive
+        class="flex items-center gap-2 min-w-0 px-3 py-2 text-sm rounded-xl transition-all {isActive
           ? 'bg-primary/10 text-primary font-medium'
           : 'text-foreground hover:text-foreground hover:bg-accent/50'}"
       >
         {#if doc.meta?.icon}
           <Icon icon={doc.meta.icon} size={16} className="shrink-0" />
         {/if}
-        {@html renderInlineCode(doc.title)}
-        {#if doc.meta?.isProtected}
-          <Lock size={14} class="shrink-0 text-muted-foreground ml-auto" />
+        <span class="truncate">{@html renderInlineCode(doc.title)}</span>
+        {#if badges.length > 0 || doc.meta?.isProtected}
+          <span class="ml-auto flex items-center gap-1 shrink-0">
+            {#each badges as badge (badge.text)}
+              <SidebarBadge {badge} />
+            {/each}
+            {#if doc.meta?.isProtected}
+              <Lock size={14} class="text-muted-foreground" />
+            {/if}
+          </span>
         {/if}
       </a>
     {/each}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SpecraConfig } from '$lib/config.types.js';
+  import type { BadgeInput } from '$lib/badges.js';
   import SidebarMenuItems from './SidebarMenuItems.svelte';
 
   interface DocItem {
@@ -16,9 +17,11 @@
     categoryCollapsed?: boolean;
     categoryIcon?: string;
     categoryTabGroup?: string;
+    categoryBadge?: BadgeInput;
     meta?: {
       icon?: string;
       tab_group?: string;
+      badge?: BadgeInput;
       [key: string]: any;
     };
   }

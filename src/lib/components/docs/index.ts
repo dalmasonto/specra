@@ -39,6 +39,7 @@ export { default as NotFoundContent } from './NotFoundContent.svelte';
 export { default as SearchHighlight } from './SearchHighlight.svelte';
 export { default as SearchModal } from './SearchModal.svelte';
 export { default as Sidebar } from './Sidebar.svelte';
+export { default as SidebarBadge } from './SidebarBadge.svelte';
 export { default as SidebarMenuItems } from './SidebarMenuItems.svelte';
 export { default as SidebarSkeleton } from './SidebarSkeleton.svelte';
 export { default as SiteBanner } from './SiteBanner.svelte';

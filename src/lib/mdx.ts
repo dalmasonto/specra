@@ -16,6 +16,7 @@ import rehypeKatex from "rehype-katex"
 import rehypeStringify from "rehype-stringify"
 import { toHtml } from "hast-util-to-html"
 import { getAllCategoryConfigs } from "./category"
+import type { BadgeInput } from "./badges"
 import { sortSidebarItems, sortSidebarGroups, buildSidebarStructure, type SidebarGroup } from "./sidebar-utils"
 import { sanitizePath, validatePathWithinDirectory, validateMDXSecurity } from "./mdx-security"
 import { getConfig } from "./config"
@@ -1380,6 +1381,7 @@ export interface DocMeta {
   word_count?: number
   icon?: string  // Icon name for sidebar display (Lucide icon name)
   tab_group?: string  // Tab group ID for organizing docs into tabs
+  badge?: BadgeInput  // Badge(s) shown next to this page in the sidebar
   locale?: string // Locale of the document
   protected?: boolean  // Whether this page requires social login to access
   isProtected?: boolean  // Whether this page requires authentication
@@ -1398,6 +1400,7 @@ export interface Doc {
   categoryCollapsed?: boolean  // Default collapsed state from _category_.json
   categoryIcon?: string  // Icon from _category_.json
   categoryTabGroup?: string  // Tab group from _category_.json
+  categoryBadge?: BadgeInput  // Badge(s) from _category_.json
   locale?: string // Locale of the document
 }
 
@@ -1700,6 +1703,7 @@ export function getAllDocs(version = "v1.0.0", locale?: string, product?: string
             doc.categoryCollapsed = categoryConfig.collapsed
             doc.categoryIcon = categoryConfig.icon
             doc.categoryTabGroup = categoryConfig.tab_group
+            doc.categoryBadge = categoryConfig.badge
           }
         }
 
