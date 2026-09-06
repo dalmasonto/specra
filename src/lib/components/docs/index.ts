@@ -24,6 +24,7 @@ export { default as Header } from './Header.svelte';
 export { default as HeaderWithMenu } from './HeaderWithMenu.svelte';
 export { default as HotReloadIndicator } from './HotReloadIndicator.svelte';
 export { default as Icon } from './Icon.svelte';
+export { default as LanguageSwitcher } from './LanguageSwitcher.svelte';
 export { default as Image } from './Image.svelte';
 export { default as ImageCard } from './ImageCard.svelte';
 export { default as ImageCardGrid } from './ImageCardGrid.svelte';

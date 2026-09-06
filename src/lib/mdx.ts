@@ -1130,6 +1130,21 @@ function dedentComponentChildren(markdown: string): string {
     'gi'
   )
 
+  // Character ranges covered by fenced code blocks. Component-like tags that
+  // appear inside a code EXAMPLE (e.g. `<Columns>` documented in a ```html
+  // block) are not real components — dedenting their "children" would strip
+  // the example's own indentation, so those matches must be skipped.
+  const codeRanges: Array<[number, number]> = []
+  {
+    let offset = 0
+    for (const seg of splitByCodeFences(markdown)) {
+      if (seg.isCode) codeRanges.push([offset, offset + seg.text.length])
+      offset += seg.text.length
+    }
+  }
+  const isInsideCodeFence = (pos: number): boolean =>
+    codeRanges.some(([start, end]) => pos >= start && pos < end)
+
   let result = ''
   let lastIndex = 0
   let match: RegExpExecArray | null
@@ -1138,6 +1153,9 @@ function dedentComponentChildren(markdown: string): string {
   while ((match = openTagRegex.exec(markdown)) !== null) {
     // Skip if this tag is nested inside a previously processed block
     if (match.index < lastIndex) continue
+
+    // Skip component-like tags that live inside a fenced code example.
+    if (isInsideCodeFence(match.index)) continue
 
     const tagName = match[1].match(/<(\w+)/)?.[1]
     if (!tagName) continue
@@ -1243,6 +1261,21 @@ function ensureComponentBlockIntegrity(markdown: string): string {
     'gim'
   )
 
+  // Character ranges of fenced code blocks. A component-like tag inside a code
+  // EXAMPLE (e.g. `<Accordion>` shown in a ```mdx block) is not a real block —
+  // injecting HTML comments for its blank lines leaves a stray `<!-- -->` in the
+  // rendered example, so those matches are skipped.
+  const codeRanges: Array<[number, number]> = []
+  {
+    let offset = 0
+    for (const seg of splitByCodeFences(markdown)) {
+      if (seg.isCode) codeRanges.push([offset, offset + seg.text.length])
+      offset += seg.text.length
+    }
+  }
+  const isInsideCodeFence = (pos: number): boolean =>
+    codeRanges.some(([start, end]) => pos >= start && pos < end)
+
   let result = ''
   let lastIndex = 0
   let match: RegExpExecArray | null
@@ -1251,6 +1284,9 @@ function ensureComponentBlockIntegrity(markdown: string): string {
   while ((match = openTagRegex.exec(markdown)) !== null) {
     // Skip if inside a previously processed block
     if (match.index < lastIndex) continue
+
+    // Skip component-like tags that live inside a fenced code example.
+    if (isInsideCodeFence(match.index)) continue
 
     const tagName = match[1].match(/<(\w+)/)?.[1]
     if (!tagName) continue
