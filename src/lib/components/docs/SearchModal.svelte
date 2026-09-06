@@ -2,6 +2,7 @@
   import { Search, X, FileText, Hash, ArrowUp, ArrowDown, CornerDownLeft, Loader2 } from 'lucide-svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
+  import { page } from '$app/stores';
   import type { SpecraConfig } from '$lib/config.types.js';
 
   interface SearchResult {
@@ -30,6 +31,19 @@
 
   const siteBaseUrl = $derived(config.site?.baseUrl || '/');
   const docsBaseUrl = '/docs';
+
+  // Determine the locale the user is currently reading in, so search can be
+  // scoped to that language. Locale appears as a path segment after the
+  // version (e.g. /docs/v1.0.0/fr/...); fall back to the configured default.
+  const currentLocale = $derived.by(() => {
+    const i18n = config.features?.i18n;
+    if (!i18n) return undefined;
+    const locales = typeof i18n === 'object' ? i18n.locales : ['en'];
+    const defaultLocale = typeof i18n === 'object' ? i18n.defaultLocale : 'en';
+    const parts = ($page?.url?.pathname || '').split('/').filter(Boolean);
+    const found = parts.find((p) => locales.includes(p));
+    return found || defaultLocale;
+  });
 
   $effect(() => {
     if (isOpen && inputEl) {
@@ -75,8 +89,9 @@
     isLoading = true;
     debounceTimer = setTimeout(async () => {
       try {
+        const localeParam = currentLocale ? `&locale=${encodeURIComponent(currentLocale)}` : '';
         const response = await fetch(
-          `${siteBaseUrl.replace(/\/$/, '')}/api/search?q=${encodeURIComponent(value.trim())}`
+          `${siteBaseUrl.replace(/\/$/, '')}/api/search?q=${encodeURIComponent(value.trim())}${localeParam}`
         );
         if (response.ok) {
           const data = await response.json();
