@@ -74,6 +74,8 @@ const COMPONENT_TAG_MAP: Record<string, string> = {
   math: 'Math',
   columns: 'Columns',
   column: 'Column',
+  timeline: 'Timeline',
+  timelineitem: 'TimelineItem',
   docbadge: 'DocBadge',
   badge: 'Badge',
   tooltip: 'Tooltip',
