@@ -74,6 +74,18 @@
     return () => document.removeEventListener('keydown', handleKeydown);
   });
 
+  // Move the overlay to <body> so it escapes any ancestor that establishes a
+  // containing block for position:fixed (the header uses backdrop-filter, which
+  // would otherwise clip this fixed overlay to the header's box).
+  function portal(node: HTMLElement) {
+    if (browser) document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      }
+    };
+  }
+
   function handleSearch(value: string) {
     query = value;
     selectedIndex = 0;
@@ -148,6 +160,7 @@
 {#if isOpen}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
+    use:portal
     class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
     role="dialog"
     aria-modal="true"

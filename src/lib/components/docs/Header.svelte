@@ -4,7 +4,9 @@
   import { getConfigContext } from '$lib/stores/config.js';
   import { sidebarStore } from '$lib/stores/sidebar.js';
   import VersionSwitcher from './VersionSwitcher.svelte';
+  import LanguageSwitcher from './LanguageSwitcher.svelte';
   import ProductSwitcher from './ProductSwitcher.svelte';
+  import { page } from '$app/stores';
   import VersionBanner from './VersionBanner.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
   import SearchModal from './SearchModal.svelte';
@@ -64,6 +66,18 @@
   let searchOpen = $state(false);
   let isFlush = $derived(config?.navigation?.sidebarStyle === 'flush');
   let headerEl = $state<HTMLElement | null>(null);
+
+  // i18n / language switcher config
+  let i18n = $derived(
+    config?.features?.i18n && typeof config.features.i18n === 'object' ? config.features.i18n : null
+  );
+  let localeList = $derived<string[]>(i18n?.locales ?? []);
+  let defaultLocale = $derived(i18n?.defaultLocale ?? 'en');
+  // Active locale = the first path segment matching a configured locale, else default.
+  let activeLocale = $derived.by(() => {
+    const parts = ($page?.url?.pathname || '').split('/').filter(Boolean);
+    return parts.find((p) => localeList.includes(p)) || defaultLocale;
+  });
 
   // Set a CSS variable on :root with the header's actual height so sidebars
   // can use it for their sticky top offset. Uses ResizeObserver to stay
@@ -149,6 +163,16 @@
 
       {#if config.features?.versioning}
         <VersionSwitcher {currentVersion} {versions} {versionsMeta} />
+      {/if}
+
+      {#if localeList.length > 1}
+        <LanguageSwitcher
+          currentLocale={activeLocale}
+          locales={localeList}
+          localeNames={i18n?.localeNames}
+          {defaultLocale}
+          prefixDefault={i18n?.prefixDefault}
+        />
       {/if}
 
       <!-- Social Links -->
