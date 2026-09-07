@@ -45,7 +45,8 @@
   },
   "files": [
     "dist",
-    "config"
+    "config",
+    "!dist/**/*.test.*"
   ],
   "scripts": {
     "build": "rm -rf dist && npm run generate:schema && svelte-kit sync && svelte-package",
